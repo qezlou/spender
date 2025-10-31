@@ -21,7 +21,7 @@ class HETDEX(Instrument):
     to download and organize the spectra from the DR16 data archive.
     """
 
-    _wave_obs = torch.arange(3470, 5541, 1)
+    _wave_obs = torch.arange(3470, 5541, 2)
 
     def __init__(self,lsf=None, calibration=None):
         """Create instrument
@@ -74,6 +74,7 @@ class HETDEX(Instrument):
             spec, w, z = spec[:split], w[:split], z[:split]
         elif which == "valid":
             spec, w, z = spec[split:], w[split:], z[split:]
+        
         dataset = torch.utils.data.TensorDataset(spec, w, z)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_instance)
 
@@ -96,10 +97,18 @@ class HETDEX(Instrument):
         file_name = os.path.join(data_dir, 'fib_spec', file_name)
         with h5py.File(file_name, 'r') as f:
             spec = torch.from_numpy(f['calfib'][:])
-            ivar = torch.from_numpy(1/f['calfibe'][:])
-            mask = torch.from_numpy(np.where(f['calfibe'][:] < 0, 1, 0))
+            calfibe = f['calfibe'][:]
+            calfibe[calfibe <= 0] = np.inf  # avoid zero or negative fluxes
+            ivar = torch.from_numpy(1.0 / calfibe**2)
+            # We are not using the mask here!! 
+            mask = torch.from_numpy(np.where(f['calfibe'][:] <= 0, 1, 0))
             z = torch.from_numpy(np.zeros_like(f['calfib'][:,0]))
-        
+        # Normalize the spectra using the median in the range 4300-5200AA
+        sel = (cls._wave_obs >= 4300) & (cls._wave_obs <= 5200)
+        norm = torch.median(spec[:, sel])
+        spec = spec / norm
+        ivar = ivar * (norm**2).unsqueeze(0)
+
         return {'spec': spec, 'ivar': ivar, 'mask': mask, 'z': z}
 
     @classmethod

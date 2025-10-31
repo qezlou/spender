@@ -194,7 +194,6 @@ class SpectrumEncoder(nn.Module):
 
         # apply attention
         x = torch.sum(h * a, dim=2)
-        print(f'after applying attention: {x} - {x.size()}')
         # run attended features into MLP for final latents
         x = self.mlp(x)
         return x
@@ -479,16 +478,13 @@ class BaseAutoencoder(nn.Module):
 
     def _forward(self, y, instrument=None, z=None, s=None, normalize=False, weights=None):
         """Perform a forward pass through the model to create a latent, restframe, and reconstruction from an observed spectrum, instrument, and redshift. If inverse variance weights are passed, also normalizes the reconstruction to the observed spectrum."""
-        print(f'y passed to _forward: {y} - {y.size()}')
         if s is None:
             s = self.encode(y)
-        print(f'encoded latents: {s} - {s.size()}')
         if instrument is None:
             instrument = self.encoder.instrument
 
         # make restframe model spectrum
         restframe = self.decode(s)
-        print(f'Unnormalized decoded spectrum: {restframe}')
         # make resampled and interpolated reconstruction
         #reconstruction, valid = self.decoder.transform(restframe, instrument=instrument, z=z, return_valid=True)
         valid = torch.ones_like(y)
@@ -560,8 +556,6 @@ class BaseAutoencoder(nn.Module):
         float or `torch.tensor`, shape (N,) of weighted MSE loss
         """
         s, x, y_, valid = self._forward(y, instrument=instrument, z=z, s=s, normalize=normalize)
-        print(f' valid = {valid}, y_ = {y_}')
-
         return self._loss(y, w * valid, y_, individual=individual)
 
     def _loss(self, y, w, y_, individual=False):
