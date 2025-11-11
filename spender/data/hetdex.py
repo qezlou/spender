@@ -21,9 +21,7 @@ class HETDEX(Instrument):
     to download and organize the spectra from the DR16 data archive.
     """
 
-    _wave_obs = torch.arange(3470, 5541, 2)
-
-    def __init__(self,lsf=None, calibration=None):
+    def __init__(self,wave_obs=None, lsf=None, calibration=None):
         """Create instrument
 
         Parameters
@@ -33,11 +31,14 @@ class HETDEX(Instrument):
         calibration: callable
             (optional) function to calibrate the observed spectrum
         """
-        super().__init__(HETDEX._wave_obs, lsf=lsf, calibration=calibration)
+        if wave_obs is  None:
+            wave_obs = torch.arange(3470, 5541, 2)
+        else:
+            wave_obs = wave_obs
+        super().__init__(wave_obs, lsf=lsf, calibration=calibration)
     
-    @classmethod
     def get_data_loader(
-        cls,
+        self,
         dir=None,
         which=None,
         batch_size=1024,
@@ -64,7 +65,7 @@ class HETDEX(Instrument):
         -------
         :class:`torch.utils.data.DataLoader`
         """
-        raw = cls.load_raw_file(dir)
+        raw = self.load_raw_file(dir)
         spec = raw["spec"]
         w = raw["ivar"]  # weight
         z = raw["z"]
@@ -78,8 +79,7 @@ class HETDEX(Instrument):
         dataset = torch.utils.data.TensorDataset(spec, w, z)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_instance)
 
-    @classmethod
-    def load_raw_file(cls, data_dir, file_name='all_calfibs.h5'):
+    def load_raw_file(self, data_dir, file_name='all_calfibs.h5'):
         """Load pre-saved HETDEX fiber spectra in h5 format
 
         Parameters
@@ -104,7 +104,7 @@ class HETDEX(Instrument):
             mask = torch.from_numpy(np.where(f['calfibe'][:] <= 0, 1, 0))
             z = torch.from_numpy(np.zeros_like(f['calfib'][:,0]))
         # Normalize the spectra using the median in the range 4300-5200AA
-        sel = (cls._wave_obs >= 4300) & (cls._wave_obs <= 5200)
+        sel = (self.wave_obs >= 4300) & (self.wave_obs <= 5200)
         norm = torch.median(spec[:, sel])
         spec = spec / norm
         ivar = ivar * (norm**2).unsqueeze(0)
@@ -396,9 +396,9 @@ class HETDEX(Instrument):
         mask = data["and_mask"].astype(bool) | (ivar <= 1e-6)
         ivar[mask] = 0
 
-        # loglam is subset of _wave_obs, need to insert into extended tensor
-        L = len(cls._wave_obs)
-        start = int(np.around((loglam[0] - torch.log10(cls._wave_obs[0]).item())/0.0001))
+        # loglam is subset of wave_obs, need to insert into extended tensor
+        L = len(cls.wave_obs)
+        start = int(np.around((loglam[0] - torch.log10(cls.wave_obs[0]).item())/0.0001))
         if start<0:
             flux = flux[-start:]
             ivar = ivar[-start:]
@@ -426,7 +426,7 @@ class HETDEX(Instrument):
 
         # normalize spectrum:
         # for redshift invariant encoder: select norm window in restframe
-        wave_rest = cls._wave_obs / (1 + z)
+        wave_rest = cls.wave_obs / (1 + z)
         # flatish region that is well observed out to z ~ 0.5
         sel = (w > 0) & (wave_rest > 5300) & (wave_rest < 5850)
         if sel.count_nonzero() == 0: norm = torch.tensor(0)
@@ -468,7 +468,7 @@ class HETDEX(Instrument):
         """
 
         N = len(fields)
-        L = len(cls._wave_obs)
+        L = len(cls.wave_obs)
         spec = torch.empty((N, L))
         w = torch.empty((N, L))
         z = torch.empty(N)
@@ -570,7 +570,7 @@ class HETDEX(Instrument):
         spec, w, z = batch[:3]
         batch_size, spec_size = spec.shape
         device = spec.device
-        wave_obs = cls._wave_obs.to(device)
+        wave_obs = cls.wave_obs.to(device)
 
         if redshift:
             if z_new == None:
