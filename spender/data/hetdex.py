@@ -44,6 +44,7 @@ class HETDEX(Instrument):
         which=None,
         batch_size=1024,
         shuffle_instance=False,
+        split_ratio=0.95,
     ):
         """Get a dataloader for batches of spectra
 
@@ -71,7 +72,7 @@ class HETDEX(Instrument):
         w = raw["ivar"]  # weight
         z = raw["z"]
         n = len(spec)
-        split = int(0.8 * n)
+        split = int(split_ratio * n)
         if which == "train":
             spec, w, z = spec[:split], w[:split], z[:split]
         elif which == "valid":
