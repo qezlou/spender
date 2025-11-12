@@ -44,8 +44,9 @@ class HETDEX(Instrument):
         which=None,
         batch_size=1024,
         shuffle_instance=False,
-        split_ratio=0.95,
-        get_shotids=False
+        get_shotids=False,
+        split_ratio=0.98,
+        seed=42
     ):
         """Get a dataloader for batches of spectra
 
@@ -63,7 +64,10 @@ class HETDEX(Instrument):
             Whether to shuffle the order of the batch files
         shuffle_instance: bool
             Whether to shuffle spectra within each batch
-
+        split_ratio: float
+            Fraction of data to use for training (rest is validation)
+        seed: int
+            Random seed for shuffling data
         Returns
         -------
         :class:`torch.utils.data.DataLoader`
