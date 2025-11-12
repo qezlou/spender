@@ -108,13 +108,13 @@ class HETDEX(Instrument):
         """
         file_name = os.path.join(data_dir, 'fib_spec', file_name)
         with h5py.File(file_name, 'r') as f:
-            spec = torch.from_numpy(f['calfib'][:,:])
-            calfibe = f['calfibe'][:,:]
+            spec = torch.from_numpy(f['calfib'][:,65:916])
+            calfibe = f['calfibe'][:,65:916]
             shotids = torch.from_numpy(f['shotids'][:])
             calfibe[calfibe <= 0] = np.inf  # avoid zero or negative fluxes
             ivar = torch.from_numpy(1.0 / calfibe**2)
             # We are not using the mask here!! 
-            mask = torch.from_numpy(np.where(f['calfibe'][:,:] <= 0, 1, 0))
+            mask = torch.from_numpy(np.where(f['calfibe'][:,65:916] <= 0, 1, 0))
             z = torch.from_numpy(np.zeros_like(f['calfib'][:,0]))
         # Normalize the spectra using the median in the range 4300-5200AA
         sel = (self.wave_obs >= 4300) & (self.wave_obs <= 5200)
