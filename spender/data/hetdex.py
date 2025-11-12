@@ -31,7 +31,7 @@ class HETDEX(Instrument):
             (optional) function to calibrate the observed spectrum
         """
         if wave_obs is  None:
-            wave_obs = torch.arange(3470, 5541, 2)
+            wave_obs = torch.arange(3600, 5301, 2, dtype=torch.float32)
         else:
             wave_obs = wave_obs
         super().__init__(wave_obs, lsf=lsf, calibration=calibration)
