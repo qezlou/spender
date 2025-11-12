@@ -89,6 +89,7 @@ class HETDEX(Instrument):
             dataset = torch.utils.data.TensorDataset(spec, w, z, shotids)
         else:
             dataset = torch.utils.data.TensorDataset(spec, w, z)
+        torch.manual_seed(seed)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_instance), norm
 
     def load_raw_file(self, data_dir, file_name='all_calfibs.h5'):
