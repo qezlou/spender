@@ -45,6 +45,7 @@ class HETDEX(Instrument):
         batch_size=1024,
         shuffle_instance=False,
         split_ratio=0.95,
+        get_shotids=False
     ):
         """Get a dataloader for batches of spectra
 
@@ -71,15 +72,20 @@ class HETDEX(Instrument):
         spec = raw["spec"]
         w = raw["ivar"]  # weight
         z = raw["z"]
+        shotids = raw['shotids']
         n = len(spec)
         split = int(split_ratio * n)
+        norm = raw['norm']
         if which == "train":
-            spec, w, z = spec[:split], w[:split], z[:split]
+            spec, w, z, shotids = spec[:split], w[:split], z[:split], shotids[:split]
         elif which == "valid":
-            spec, w, z = spec[split:], w[split:], z[split:]
+            spec, w, z, shotids = spec[split:], w[split:], z[split:], shotids[split:]
         
-        dataset = torch.utils.data.TensorDataset(spec, w, z)
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_instance)
+        if get_shotids:
+            dataset = torch.utils.data.TensorDataset(spec, w, z, shotids)
+        else:
+            dataset = torch.utils.data.TensorDataset(spec, w, z)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_instance), norm
 
     def load_raw_file(self, data_dir, file_name='all_calfibs.h5'):
         """Load pre-saved HETDEX fiber spectra in h5 format
@@ -100,6 +106,7 @@ class HETDEX(Instrument):
         with h5py.File(file_name, 'r') as f:
             spec = torch.from_numpy(f['calfib'][:,:])
             calfibe = f['calfibe'][:,:]
+            shotids = torch.from_numpy(f['shotids'][:])
             calfibe[calfibe <= 0] = np.inf  # avoid zero or negative fluxes
             ivar = torch.from_numpy(1.0 / calfibe**2)
             # We are not using the mask here!! 
@@ -111,7 +118,7 @@ class HETDEX(Instrument):
         spec = spec / norm
         ivar = ivar * (norm**2).unsqueeze(0)
 
-        return {'spec': spec, 'ivar': ivar, 'mask': mask, 'z': z}
+        return {'spec': spec, 'ivar': ivar, 'mask': mask, 'z': z, 'shotids': shotids, 'norm': norm}
 
     @classmethod
     def get_data_loader_old(
