@@ -121,7 +121,7 @@ class HETDEX(Instrument):
         if normalize:
             norm = torch.median(spec[:, sel])
         else:
-            norm = torch.ones(spec.shape[0])
+            norm = torch.ones(spec.shape[1])
         spec = spec  / norm
         ivar = ivar * (norm**2).unsqueeze(0)
 
