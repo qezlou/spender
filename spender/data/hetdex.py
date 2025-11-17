@@ -113,8 +113,9 @@ class HETDEX(Instrument):
             shotids = torch.from_numpy(f['shotids'][:])
             calfibe[calfibe <= 0] = np.inf  # avoid zero or negative fluxes
             ivar = torch.from_numpy(1.0 / calfibe**2)
-            # We are not using the mask here!! 
+            # For bad pixels, set ivar to zero
             mask = torch.from_numpy(np.where(f['calfibe'][:,65:916] <= 0, 1, 0))
+            ivar[mask == 1] = 0.0
             z = torch.from_numpy(np.zeros_like(f['calfib'][:,0]))
         # Normalize the spectra using the median in the range 4300-5200AA
         sel = (self.wave_obs >= 4300) & (self.wave_obs <= 5200)
