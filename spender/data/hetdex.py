@@ -71,7 +71,7 @@ class HETDEX(Instrument):
         -------
         :class:`torch.utils.data.DataLoader`
         """
-        raw = self.load_raw_file(dir, file_name)
+        raw = self.load_raw_file(dir,seed=seed, file_name=file_name)
         spec = raw["spec"]
         w = raw["ivar"]  # weight
         z = raw["z"]
@@ -91,7 +91,7 @@ class HETDEX(Instrument):
         torch.manual_seed(seed)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle), norm
 
-    def load_raw_file(self, data_dir, file_name='all_calfibs.h5', normalize=False):
+    def load_raw_file(self, data_dir, seed, file_name='all_calfibs.h5', normalize=False):
         """Load pre-saved HETDEX fiber spectra in h5 format
 
         Parameters
@@ -125,5 +125,14 @@ class HETDEX(Instrument):
             norm = torch.ones(spec.shape[1])
         spec = spec  / norm
         ivar = ivar * (norm**2).unsqueeze(0)
+        torch.manual_seed(2*seed)
+        # Shuffle spectra and associated arrays
+        n_spec = spec.shape[0]
+        perm = torch.randperm(n_spec)
+        spec = spec[perm]
+        ivar = ivar[perm]
+        mask = mask[perm]
+        z = z[perm]
+        shotids = shotids[perm]
 
         return {'spec': spec, 'ivar': ivar, 'mask': mask, 'z': z, 'shotids': shotids, 'norm': norm}
