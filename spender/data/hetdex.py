@@ -91,7 +91,7 @@ class HETDEX(Instrument):
         torch.manual_seed(seed)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle), norm
 
-    def load_raw_file(self, data_dir, seed, file_name='all_calfibs.h5', normalize=False):
+    def load_raw_file(self, data_dir, seed, file_name='all_calfibs.h5', normalize=False, frac_each_file=0.1):
         """Load pre-saved HETDEX fiber spectra in h5 format
 
         Parameters
@@ -106,17 +106,37 @@ class HETDEX(Instrument):
             spectra, inverse variance weights, mask, and redshift arrays.
             Redshift is set to zero as it is irrelevant for HETDEX data.
         """
-        file_name = os.path.join(data_dir, 'fib_spec', file_name)
-        with h5py.File(file_name, 'r') as f:
-            spec = torch.from_numpy(f['calfib'][:,65:916])
-            calfibe = f['calfibe'][:,65:916]
-            shotids = torch.from_numpy(f['shotids'][:])
-            calfibe[calfibe <= 0] = np.inf  # avoid zero or negative fluxes
-            ivar = torch.from_numpy(1.0 / calfibe**2)
-            # For bad pixels, set ivar to zero
-            mask = torch.from_numpy(np.where(f['calfibe'][:,65:916] <= 0, 1, 0))
-            ivar[mask == 1] = 0.0
-            z = torch.from_numpy(np.zeros_like(f['calfib'][:,0]))
+        file_name = glob.glob(os.path.join(data_dir, 'fib_spec', file_name))
+        print(f'Number of files found: {len(file_name)}', flush=True)
+        if len(file_name) == 0:
+            raise FileNotFoundError(f"No file named {file_name} found in {os.path.join(data_dir, 'fib_spec')}")
+
+        for i, fname in enumerate(file_name):
+            with h5py.File(fname, 'r') as f:
+                ind_rand = np.random.choice(f['calfib'].shape[0], int(frac_each_file * f['calfib'].shape[0]), replace=False)
+                ind_rand = np.sort(ind_rand)
+                spec_f = torch.from_numpy(f['calfib'][:,65:916][ind_rand])
+                calfibe_f = f['calfibe'][:,65:916][ind_rand]
+                shotids_f = torch.from_numpy(f['shotids'][:][ind_rand])
+                calfibe_f[calfibe_f <= 0] = np.inf  # avoid zero or negative fluxes
+                ivar_f = torch.from_numpy(1.0 / calfibe_f**2)
+                # For bad pixels, set ivar to zero
+                mask_f = torch.from_numpy(np.where(f['calfibe'][:,65:916][ind_rand] <= 0, 1, 0))
+                ivar_f[mask_f == 1] = 0.0
+                z_f = torch.from_numpy(np.zeros(ind_rand.shape[0]))
+                if i == 0:
+                    spec = spec_f
+                    ivar = ivar_f
+                    mask = mask_f
+                    z = z_f
+                    shotids = shotids_f
+                else:
+                    spec = torch.cat((spec, spec_f), dim=0)
+                    ivar = torch.cat((ivar, ivar_f), dim=0)
+                    mask = torch.cat((mask, mask_f), dim=0)
+                    z = torch.cat((z, z_f), dim=0)
+                    shotids = torch.cat((shotids, shotids_f), dim=0)
+        print(f'done loading {spec.shape[0]} spectra', flush=True)
         # Normalize the spectra using the median in the range 4300-5200AA
         sel = (self.wave_obs >= 4300) & (self.wave_obs <= 5200)
         if normalize:
