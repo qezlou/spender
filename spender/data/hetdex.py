@@ -45,7 +45,8 @@ class HETDEX(Instrument):
         shuffle = True,
         get_shotids=False,
         split_ratio=0.98,
-        seed=42
+        seed=42,
+        frac_each_file=0.1
     ):
         """Get a dataloader for batches of spectra
 
@@ -71,7 +72,7 @@ class HETDEX(Instrument):
         -------
         :class:`torch.utils.data.DataLoader`
         """
-        raw = self.load_raw_file(dir,seed=seed, file_name=file_name)
+        raw = self.load_raw_file(dir,seed=seed, file_name=file_name, frac_each_file=frac_each_file)
         spec = raw["spec"]
         w = raw["ivar"]  # weight
         z = raw["z"]
