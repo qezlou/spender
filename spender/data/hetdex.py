@@ -43,10 +43,8 @@ class HETDEX(Instrument):
         which=None,
         batch_size=1024,
         shuffle = True,
-        get_shotids=False,
         split_ratio=0.98,
-        seed=42,
-        frac_each_file=0.1
+        seed=42
     ):
         """Get a dataloader for batches of spectra
 
@@ -72,27 +70,23 @@ class HETDEX(Instrument):
         -------
         :class:`torch.utils.data.DataLoader`
         """
-        raw = self.load_raw_file(dir,seed=seed, file_name=file_name, frac_each_file=frac_each_file)
+        raw = self.load_raw_file(dir,seed=seed, file_name=file_name)
         spec = raw["spec"]
         w = raw["ivar"]  # weight
         z = raw["z"]
-        shotids = raw['shotids']
+        ind = raw["ind"]
         n = len(spec)
         split = int(split_ratio * n)
-        norm = raw['norm']
         if which == "train":
-            spec, w, z, shotids = spec[:split], w[:split], z[:split], shotids[:split]
+            spec, w, z, ind = spec[:split], w[:split], z[:split], ind[:split]
         elif which == "valid":
-            spec, w, z, shotids = spec[split:], w[split:], z[split:], shotids[split:]
+            spec, w, z, ind = spec[split:], w[split:], z[split:], ind[split:]
         
-        if get_shotids:
-            dataset = torch.utils.data.TensorDataset(spec, w, z, shotids)
-        else:
-            dataset = torch.utils.data.TensorDataset(spec, w, z)
+        dataset = torch.utils.data.TensorDataset(spec, w, z, ind)
         torch.manual_seed(seed)
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle), norm
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
-    def load_raw_file(self, data_dir, seed, file_name='all_calfibs.h5', normalize=False, frac_each_file=0.1):
+    def load_raw_file(self, data_dir, seed, file_name='all_calfibs.h5', normalize=False):
         """Load pre-saved HETDEX fiber spectra in h5 format
 
         Parameters
@@ -107,36 +101,19 @@ class HETDEX(Instrument):
             spectra, inverse variance weights, mask, and redshift arrays.
             Redshift is set to zero as it is irrelevant for HETDEX data.
         """
-        file_name = glob.glob(os.path.join(data_dir, 'fib_spec', file_name))
-        print(f'Number of files found: {len(file_name)}', flush=True)
-        if len(file_name) == 0:
-            raise FileNotFoundError(f"No file named {file_name} found in {os.path.join(data_dir, 'fib_spec')}")
-
-        for i, fname in enumerate(file_name):
-            with h5py.File(fname, 'r') as f:
-                ind_rand = np.random.choice(f['calfib'].shape[0], int(frac_each_file * f['calfib'].shape[0]), replace=False)
-                ind_rand = np.sort(ind_rand)
-                spec_f = torch.from_numpy(f['calfib'][:,65:916][ind_rand])
-                calfibe_f = f['calfibe'][:,65:916][ind_rand]
-                shotids_f = torch.from_numpy(f['shotids'][:][ind_rand])
-                calfibe_f[calfibe_f <= 0] = np.inf  # avoid zero or negative fluxes
-                ivar_f = torch.from_numpy(1.0 / calfibe_f**2)
-                # For bad pixels, set ivar to zero
-                mask_f = torch.from_numpy(np.where(f['calfibe'][:,65:916][ind_rand] <= 0, 1, 0))
-                ivar_f[mask_f == 1] = 0.0
-                z_f = torch.from_numpy(np.zeros(ind_rand.shape[0]))
-                if i == 0:
-                    spec = spec_f
-                    ivar = ivar_f
-                    mask = mask_f
-                    z = z_f
-                    shotids = shotids_f
-                else:
-                    spec = torch.cat((spec, spec_f), dim=0)
-                    ivar = torch.cat((ivar, ivar_f), dim=0)
-                    mask = torch.cat((mask, mask_f), dim=0)
-                    z = torch.cat((z, z_f), dim=0)
-                    shotids = torch.cat((shotids, shotids_f), dim=0)
+        file_name = os.path.join(data_dir, 'fib_spec', file_name)
+        with h5py.File(file_name, 'r') as f:
+            ind_rand = np.arange(f['calfib'].shape[0])
+            spec = torch.as_tensor(f['calfib'][:,65:916][ind_rand])
+            calfibe = f['calfibe'][:,65:916][ind_rand]
+            calfibe[calfibe <= 0] = np.inf  # avoid zero or negative fluxes
+            ivar = torch.as_tensor(1.0 / calfibe**2)
+            # For bad pixels, set ivar to zero
+            mask = torch.as_tensor(np.where(f['calfibe'][:,65:916][ind_rand] <= 0, 1, 0))
+            ivar[mask == 1] = 0.0
+            ivar = torch.as_tensor(ivar)
+            z = torch.as_tensor(np.zeros(ind_rand.shape[0]))
+            ind= torch.as_tensor(ind_rand)
         print(f'done loading {spec.shape[0]} spectra', flush=True)
         # Normalize the spectra using the median in the range 4300-5200AA
         sel = (self.wave_obs >= 4300) & (self.wave_obs <= 5200)
@@ -146,14 +123,5 @@ class HETDEX(Instrument):
             norm = torch.ones(spec.shape[1])
         spec = spec  / norm
         ivar = ivar * (norm**2).unsqueeze(0)
-        torch.manual_seed(2*seed)
-        # Shuffle spectra and associated arrays
-        n_spec = spec.shape[0]
-        perm = torch.randperm(n_spec)
-        spec = spec[perm]
-        ivar = ivar[perm]
-        mask = mask[perm]
-        z = z[perm]
-        shotids = shotids[perm]
 
-        return {'spec': spec, 'ivar': ivar, 'mask': mask, 'z': z, 'shotids': shotids, 'norm': norm}
+        return {'spec': spec, 'ivar': ivar, 'mask': mask, 'z': z, 'ind': ind}
